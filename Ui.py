@@ -2,6 +2,8 @@ from tkinter import *
 import tkinter as cp
 from PIL import Image
 from PIL import ImageTk as itk
+import time
+import threading
 
 
 class Ui:
@@ -9,6 +11,8 @@ class Ui:
     def __init__(self, tello):
         self.cp = cp.Tk()
         self.tello = tello
+        self.videoScreen = None
+        self.uiOn = True
 
         # add label on UI
 
@@ -21,7 +25,8 @@ class Ui:
         instruction_main_lbl.pack(side='top', anchor=cp.W, padx=10, pady=5)
 
         # - Instruction -
-        instruction_child_lbl = cp.Label(text='Use Up, Down, Left and Right button to control the drone',
+        instruction_child_lbl = cp.Label(text='Use Up, Down, Left and Right button to move the drone\n\n'
+                                              'Use W, S, A and D button for control the drone',
                                          justify="left", font='Arial 11')
         instruction_child_lbl.pack(side='top', anchor=cp.W, padx=10, pady=5)
 
@@ -48,12 +53,12 @@ class Ui:
 
         # - Preplan -
         self.preplan_btn = cp.Button(self.cp, text="Preplan", image=self.preplanIcon, compound="left", relief="raised",
-                                     command=lambda: self.updateScreen(tello.preplanCmd))
+                                     command=lambda: self.preplanMsg(tello.preplanCmd))
         self.preplan_btn.pack(side="top", fill="both", expand="yes", padx=10, pady=10)
 
         # - Capture -
         self.snap_btn = cp.Button(self.cp, text="Capture", image=self.cameraIcon, compound="left", relief="raised",
-                                  command=lambda: self.updateScreen(tello.pauseCmd))
+                                  command=lambda: self.updateScreen(tello.takePictureCmd))
         self.snap_btn.pack(side="top", fill="both", expand="yes", padx=10, pady=10)
 
         # - Pause -
@@ -69,23 +74,42 @@ class Ui:
 
         # - Arrow key -
         self.key = cp.Frame(width=100, height=2)
-        self.key.bind('<KeyPress-w>', lambda event,: self.keyAction(tello.upCmd))
-        self.key.bind('<KeyPress-s>', lambda event,: self.keyAction(tello.downCmd))
-        self.key.bind('<KeyPress-a>', lambda event,: self.keyAction(tello.turnAntiClockWisetCmd))
-        self.key.bind('<KeyPress-d>', lambda event,: self.keyAction(tello.turnClockwiseCmd))
+        self.key.bind('<KeyPress-Up>', lambda event,: self.keyAction(tello.upCmd))
+        self.key.bind('<KeyPress-Down>', lambda event,: self.keyAction(tello.downCmd))
+        self.key.bind('<KeyPress-Left>', lambda event,: self.keyAction(tello.turnAntiClockWisetCmd))
+        self.key.bind('<KeyPress-Right>', lambda event,: self.keyAction(tello.turnClockwiseCmd))
 
-        self.key.bind('<KeyPress-Up>', lambda event,: self.keyAction(tello.forwardCmd))
-        self.key.bind('<KeyPress-Down>', lambda event,: self.keyAction(tello.backCmd))
-        self.key.bind('<KeyPress-Left>', lambda event,: self.keyAction(tello.leftCmd))
-        self.key.bind('<KeyPress-Right>', lambda event,: self.keyAction(tello.rightCmd))
+        self.key.bind('<KeyPress-w>', lambda event,: self.keyAction(tello.forwardCmd))
+        self.key.bind('<KeyPress-s>', lambda event,: self.keyAction(tello.backCmd))
+        self.key.bind('<KeyPress-a>', lambda event,: self.keyAction(tello.leftCmd))
+        self.key.bind('<KeyPress-d>', lambda event,: self.keyAction(tello.rightCmd))
         self.key.pack(side="bottom")
         self.key.focus_set()
 
+        # Video thread
+        self.videoThread = threading.Thread(target=self.videoThreadStart)
+        self.videoThread.start()
+
         self.cp.wm_title("Control Panel")
-        self.cp.geometry("500x500")
-        self.cp.wm_protocol("WM_DELETE_WINDOW")
+        self.cp.geometry("550x550")
+        self.cp.wm_protocol("WM_DELETE_WINDOW", self.terminateAll)
 
     # --- All utils ---
+
+    def videoThreadStart(self):
+        while self.uiOn:
+            while self.tello.on and self.uiOn:
+                self.frame = self.tello.readFrame()
+                if self.frame is None or self.frame.size is 0:
+                    continue
+                image = Image.fromarray(self.frame)
+                if self.videoScreen is None:
+                    self.videoScreen = cp.Label(image=image)
+                    self.videoScreen.image = image
+                    self.videoScreen.pack(side="left", padx=20, pady=20)
+                else:
+                    self.videoScreen.configure(image=image)
+                    self.videoScreen.image = image
 
     def keyAction(self, fx):
         # stop movement
@@ -95,3 +119,11 @@ class Ui:
 
     def updateScreen(self, fx):
         self.display.set(fx())
+
+    def preplanMsg(self, fx):
+        self.display.set('-- Preplan initiate --')
+        fx()
+
+    def terminateAll(self):
+        self.uiOn = False
+        self.cp.quit()

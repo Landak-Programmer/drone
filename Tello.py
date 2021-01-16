@@ -4,6 +4,7 @@ import time
 from cv2 import cv2
 import datetime
 import os
+from PIL import Image
 
 import libh264decoder
 import numpy as np
@@ -29,22 +30,22 @@ class Tello:
 
     # For now we hard coded speed. I too lazy to do
     # 100 cm (1 meter)
-    _defaultSpeed = 100
+    _defaultdistance = 100
 
     def __init__(self, mode):
 
         # set mode
         self.mode = mode
 
+        # tello is on local flag
+        self.on = False
+
         # tello local var
         self.isPreplan = False
-
-        self.decoder = libh264decoder.H264Decoder()
         self.res = None
         self.frame = None
-        self.is_freeze = False
-        self.last_frame = None
-        self.last_height = 0
+
+        self.decoder = libh264decoder.H264Decoder()
         self.telloAddress = (self._telloIp, self._telloPort)
 
         # socket
@@ -74,9 +75,11 @@ class Tello:
     # --- All command are here ---
 
     def startCmd(self):
+        self.on = True
         return self._sendCommand(self._takeoff)
 
     def stopCmd(self):
+        self.on = False
         return self._sendCommand(self._land)
 
     def pauseCmd(self):
@@ -106,8 +109,11 @@ class Tello:
     def rightCmd(self):
         return self._moveCmd('right')
 
-    def _moveCmd(self, direction):
-        return self._sendCommand('%s %s' % (direction, self._defaultSpeed))
+    def _moveCmd(self, direction, distance=None):
+        if distance is None:
+            return self._sendCommand('%s %s' % (direction, self._defaultdistance))
+        else:
+            return self._sendCommand('%s %s' % (direction, distance))
 
     def takePictureCmd(self):
         ts = datetime.datetime.now()
@@ -152,40 +158,34 @@ class Tello:
 
         return res
 
-    def _h264_decode(self, packet_data):
-        res_frame_list = []
+    def _h264Decoder(self, packet_data):
+        frameArr = []
         frames = self.decoder.decode(packet_data)
         for framedata in frames:
             (frame, w, h, ls) = framedata
             if frame is not None:
-                # print 'frame size %i bytes, w %i, h %i, linesize %i' % (len(frame), w, h, ls)
                 frame = np.fromstring(frame, dtype=np.ubyte, count=len(frame), sep='')
                 frame = (frame.reshape((h, ls / 3, 3)))
                 frame = frame[:, :w, :]
-                res_frame_list.append(frame)
-        return res_frame_list
+                frameArr.append(frame)
+        return frameArr
 
     def _readResponse(self):
         while True:
-            try:
-                self.response = self.cmdSocket.recvfrom(3000)
-            except socket.error as exc:
-                # catch exception
-                print ("%s" % exc)
+            self.response = self.cmdSocket.recvfrom(3000)
+
+    def readFrame(self):
+        return self.frame
 
     def _readVideoFeed(self):
-        packet_data = ""
+        resData = ""
         while True:
-            try:
-                res_string, ip = self.videoSocket.recvfrom(2048)
-                packet_data += res_string
-                if len(res_string) != 1460:
-                    for frame in self._h264_decode(packet_data):
-                        self.frame = frame
-                    packet_data = ""
-
-            except socket.error as exc:
-                print ("%s" % exc)
+            res = self.videoSocket.recvfrom(2048)
+            resData += res
+            if len(res) != 1460:
+                for frame in self._h264Decoder(resData):
+                    self.frame = frame
+                resData = ""
 
     # --- End of utils ---
 
