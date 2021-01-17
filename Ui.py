@@ -11,7 +11,6 @@ class Ui:
     def __init__(self, tello):
         self.cp = cp.Tk()
         self.tello = tello
-        self.videoScreen = None
         self.uiOn = True
 
         # add label on UI
@@ -29,6 +28,12 @@ class Ui:
                                               'Use W, S, A and D button for control the drone',
                                          justify="left", font='Arial 11')
         instruction_child_lbl.pack(side='top', anchor=cp.W, padx=10, pady=5)
+
+        # init black screen
+        self.blackscreen = itk.PhotoImage(Image.open('resources\\blackscreen.png'))
+        self.videoScreen = cp.Label(image = self.blackscreen)
+        self.videoScreen.image = self.blackscreen
+        self.videoScreen.pack(side="top", pady=10)
 
         # add entry box
         self.display = StringVar()
@@ -91,7 +96,7 @@ class Ui:
         self.videoThread.start()
 
         self.cp.wm_title("Control Panel")
-        self.cp.geometry("550x550")
+        self.cp.geometry("550x850")
         self.cp.wm_protocol("WM_DELETE_WINDOW", self.terminateAll)
 
     # --- All utils ---
@@ -103,13 +108,8 @@ class Ui:
                 if self.frame is None or self.frame.size is 0:
                     continue
                 image = Image.fromarray(self.frame)
-                if self.videoScreen is None:
-                    self.videoScreen = cp.Label(image=image)
-                    self.videoScreen.image = image
-                    self.videoScreen.pack(side="left", padx=20, pady=20)
-                else:
-                    self.videoScreen.configure(image=image)
-                    self.videoScreen.image = image
+                self.videoScreen.configure(image=image)
+                self.videoScreen.image = image
 
     def keyAction(self, fx):
         # stop movement
