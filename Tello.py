@@ -4,7 +4,6 @@ import time
 from cv2 import cv2
 import datetime
 import os
-from PIL import Image
 
 import libh264decoder
 import numpy as np
@@ -199,19 +198,27 @@ class Tello:
         self.preplanThread.start()
 
     def _preplanThreadStart(self):
-        print('-- Test --')
         print('-- Preplan in progress... --')
-        lcIt = 0
-        # 5 sec sleep
-        while lcIt < 5 and self.preplanLock:
-            time.sleep(1)
-            lcIt += 1
-        if lcIt is 5:
+
+        isSuccessful = True
+
+        pathArr = ['forward 100', 'ccw 90', 'forward 80', 'ccw 90', 'forward 40', 'ccw 90', 'forward 40', 'cw 90',
+                   'forward 60', 'ccw 90', 'forward 40']
+
+        for path in pathArr:
+            if self.preplanLock:
+                self._sendCommandWithOverride(path)
+                time.sleep(1.5)
+            else:
+                isSuccessful = False
+                break
+
+        if isSuccessful:
             print('-- Preplan successful! --')
-        else:
-            print('-- Preplan terminate! --')
+
         self.preplanLock = False
         self.isPreplan = False
 
     def _preplanTerminate(self):
+        print('-- Preplan terminate! --')
         self.preplanLock = False

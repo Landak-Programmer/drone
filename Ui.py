@@ -114,6 +114,8 @@ class Ui:
     def keyAction(self, fx):
         # stop movement
         self.tello.stopCmd()
+        # FIXME: gap before sending new movement command
+        time.sleep(.3)
         # send command
         self.updateScreen(fx)
 
