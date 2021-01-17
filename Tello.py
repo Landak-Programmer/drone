@@ -115,8 +115,8 @@ class Tello:
             return self._sendCommand('%s %s' % (direction, distance))
 
     def takePictureCmd(self):
-        ts = datetime.datetime.now()
-        filename = "{}.jpg".format(ts.strftime("%Y-%m-%d_%H-%M-%S"))
+        now = datetime.datetime.now()
+        filename = "{}.jpg".format(now.strftime("%Y-%m-%d_%H-%M-%S"))
         p = os.path.sep.join((self._imagePath, filename))
         cv2.imwrite(p, cv2.cvtColor(self.frame, cv2.COLOR_RGB2BGR))
 
@@ -157,11 +157,11 @@ class Tello:
 
         return res
 
-    def _h264Decoder(self, packet_data):
+    def _h264Decoder(self, packetData):
         frameArr = []
-        frames = self.decoder.decode(packet_data)
-        for framedata in frames:
-            (frame, w, h, ls) = framedata
+        frames = self.decoder.decode(packetData)
+        for frameData in frames:
+            (frame, w, h, ls) = frameData
             if frame is not None:
                 frame = np.fromstring(frame, dtype=np.ubyte, count=len(frame), sep='')
                 frame = (frame.reshape((h, ls / 3, 3)))
