@@ -104,19 +104,15 @@ class Ui:
     def videoThreadStart(self):
         while self.uiOn:
             while self.tello.on and self.uiOn:
-                self.frame = self.tello.readFrame()
+                self.frame = self.tello.getFrame()
                 if self.frame is None or self.frame.size is 0:
                     continue
                 image = Image.fromarray(self.frame)
                 self.videoScreen.configure(image=image)
-                self.videoScreen.image = image
 
     def keyAction(self, fx):
-        # stop movement
         self.tello.stopCmd()
-        # FIXME: gap before sending new movement command
         time.sleep(.3)
-        # send command
         self.updateScreen(fx)
 
     def updateScreen(self, fx):

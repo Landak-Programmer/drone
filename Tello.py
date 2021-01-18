@@ -31,6 +31,12 @@ class Tello:
     # 100 cm (1 meter)
     _defaultdistance = 100
 
+    # reverse map
+    reverseMap = {'up 100': 'down 100', 'down 100': 'up 100',
+                  'cw 90': 'ccw 90', 'ccw 90': 'cw 90',
+                  'forward 100': 'back 100', 'back 100': 'forward 100',
+                  'left 90': 'right 90', 'right 90': 'left 90'}
+
     def __init__(self, mode):
 
         # set mode
@@ -46,6 +52,9 @@ class Tello:
 
         self.decoder = libh264decoder.H264Decoder()
         self.telloAddress = (self._telloIp, self._telloPort)
+
+        self.trace = []
+        self.isReverting = False
 
         # socket
         self.cmdSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -115,22 +124,34 @@ class Tello:
             return self._sendCommand('%s %s' % (direction, distance))
 
     def takePictureCmd(self):
+        lastFrame = self.getFrame()
+        return self._processSaveImage(lastFrame)
+
+    def _processSaveImage(self, lastFrame):
         now = datetime.datetime.now()
         filename = "{}.jpg".format(now.strftime("%Y-%m-%d_%H-%M-%S"))
         p = os.path.sep.join((self._imagePath, filename))
-        cv2.imwrite(p, cv2.cvtColor(self.frame, cv2.COLOR_RGB2BGR))
+        cv2.imwrite(p, cv2.cvtColor(lastFrame, cv2.COLOR_RGB2BGR))
 
     def preplanCmd(self):
         # avoid multiple override
         if self.isPreplan is False:
             self.isPreplan = True
             self.preplanInitThread()
+        else:
+            # revert!
+            self.revertMovement()
 
     # --- End of command ---
 
     # --- All utils are here ---
 
     def _sendCommand(self, command):
+
+        if self.isReverting:
+            print('DO NOT GIVE COMMAND WHEN REVERTING MOVEMENT!')
+            return
+
         if self.isPreplan is True:
             return self._sendCommandWithOverride(command, True)
         else:
@@ -139,7 +160,10 @@ class Tello:
     def _sendCommandWithOverride(self, command, override=False):
 
         if override is True:
-            self._preplanTerminate()
+            if self.preplanLock:
+                self._preplanOverride()
+            # track it
+            self.trace.append(command)
 
         self.cmdSocket.sendto(command.encode('utf-8'), self.telloAddress)
 
@@ -173,7 +197,7 @@ class Tello:
         while True:
             self.response = self.cmdSocket.recvfrom(3000)
 
-    def readFrame(self):
+    def getFrame(self):
         return self.frame
 
     def _readVideoFeed(self):
@@ -200,8 +224,6 @@ class Tello:
     def _preplanThreadStart(self):
         print('-- Preplan in progress... --')
 
-        isSuccessful = True
-
         pathArr = ['forward 100', 'ccw 90', 'forward 80', 'ccw 90', 'forward 40', 'ccw 90', 'forward 40', 'cw 90',
                    'forward 60', 'ccw 90', 'forward 40']
 
@@ -210,15 +232,37 @@ class Tello:
                 self._sendCommandWithOverride(path)
                 time.sleep(1.5)
             else:
-                isSuccessful = False
-                break
+                # save state here! Only proceed until
+                # it is lock again!
+                while not self.preplanLock:
+                    # sleep the thread 3 sec
+                    time.sleep(3.0)
 
-        if isSuccessful:
-            print('-- Preplan successful! --')
+                # after it get's out meaning preplan can proceed
+                time.sleep(1.5)
+                self._sendCommandWithOverride(path)
+
+        print('-- Preplan successful! --')
 
         self.preplanLock = False
         self.isPreplan = False
 
-    def _preplanTerminate(self):
-        print('-- Preplan terminate! --')
+    def _preplanOverride(self):
+        print('-- Preplan Override! --')
         self.preplanLock = False
+
+    def revertMovement(self):
+
+        # while reverting the drone cannot override!
+        self.isReverting = True
+
+        for cmd in self.trace:
+            rvCmd = self.reverseMap.get(cmd, 'stop')
+            print(rvCmd)
+            self._sendCommandWithOverride(rvCmd)
+            time.sleep(1.5)
+
+        self.isReverting = False
+        self.preplanLock = True
+
+        print('-- Revert Successful! --')
